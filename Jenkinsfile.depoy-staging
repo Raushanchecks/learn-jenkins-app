@@ -1,0 +1,95 @@
+pipeline {
+    agent any
+    
+    parameters {
+        string(name: 'BUILD_ID', defaultValue: '', description: 'Build ID from build pipeline')
+        string(name: 'BUILD_NUMBER', defaultValue: '', description: 'Build number from build pipeline')
+    }
+    
+    environment {
+        NETLIFY_SITE_ID = '4e0a3f77-0ae3-4335-967c-a172cd5a0305'
+        NETLIFY_AUTH_TOKEN = credentials('netlify-token')
+    }
+    
+    stages {
+        stage('Copy Build Artifacts') {
+            steps {
+                script {
+                    // Copy artifacts from the build job
+                    copyArtifacts projectName: 'build-pipeline',
+                                  selector: specific("${params.BUILD_NUMBER}"),
+                                  filter: 'build/**/*',
+                                  target: '.'
+                }
+            }
+        }
+        
+        stage('Deploy to Staging') {
+            agent {
+                docker {
+                    image 'my-playwright'
+                    reuseNode true
+                }
+            }
+            steps {
+                sh '''
+                    netlify --version
+                    echo "Deploying to Netlify site ID: $NETLIFY_SITE_ID"
+                    netlify status
+                    netlify deploy --dir=build --json > deploy-output.json
+                '''
+                script {
+                    env.STAGING_URL = sh(
+                        script: "jq -r '.deploy_url' deploy-output.json",
+                        returnStdout: true
+                    ).trim()
+                    echo "Staging URL: ${env.STAGING_URL}"
+                }
+            }
+        }
+        
+        stage('Staging E2E Tests') {
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
+                    reuseNode true
+                }
+            }
+            environment {
+                CI_ENVIRONMENT_URL = "${env.STAGING_URL}"
+            }
+            steps {
+                sh '''
+                    npx playwright test --reporter=html
+                '''
+            }
+            post {
+                always {
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: false,
+                        keepAll: false,
+                        reportDir: 'playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Staging E2E',
+                        useWrapperFileDirectly: true
+                    ])
+                }
+            }
+        }
+        
+        // stage('Trigger Production Deploy') {
+        //     steps {
+        //         input message: 'Approve deployment to production?', ok: 'Deploy'
+                
+        //         build job: 'deploy-production',
+        //               parameters: [
+        //                   string(name: 'BUILD_ID', value: "${params.BUILD_ID}"),
+        //                   string(name: 'BUILD_NUMBER', value: "${params.BUILD_NUMBER}"),
+        //                   string(name: 'STAGING_URL', value: "${env.STAGING_URL}")
+        //               ],
+        //               wait: false
+        //     }
+        // }
+    }
+}

@@ -1,0 +1,88 @@
+pipeline {
+    agent any
+    
+    parameters {
+        string(name: 'BUILD_ID', defaultValue: '', description: 'Build ID from build pipeline')
+        string(name: 'BUILD_NUMBER', defaultValue: '', description: 'Build number from build pipeline')
+        string(name: 'STAGING_URL', defaultValue: '', description: 'Staging URL for reference')
+    }
+    
+    environment {
+        NETLIFY_SITE_ID = '4e0a3f77-0ae3-4335-967c-a172cd5a0305'
+        NETLIFY_AUTH_TOKEN = credentials('netlify-token')
+        PROD_URL = 'https://cerulean-pixie-998447.netlify.app/'
+    }
+    
+    stages {
+        stage('Copy Build Artifacts') {
+            steps {
+                script {
+                    // Copy artifacts from the build job
+                    copyArtifacts projectName: 'build-pipeline',
+                                  selector: specific("${params.BUILD_NUMBER}"),
+                                  filter: 'build/**/*',
+                                  target: '.'
+                }
+            }
+        }
+        
+        stage('Deploy to Production') {
+            agent {
+                docker {
+                    image 'node:18-alpine'
+                    reuseNode true
+                }
+            }
+            steps {
+                sh '''
+                    npm install netlify-cli@20.1.1
+                    node_modules/.bin/netlify --version
+                    echo "Deploying to Netlify site ID: $NETLIFY_SITE_ID"
+                    node_modules/.bin/netlify status
+                    node_modules/.bin/netlify deploy --dir=build --prod
+                '''
+            }
+        }
+        
+        stage('Production E2E Tests') {
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
+                    reuseNode true
+                }
+            }
+            environment {
+                CI_ENVIRONMENT_URL = "${env.PROD_URL}"
+            }
+            steps {
+                sh '''
+                    npx playwright test --reporter=html
+                '''
+            }
+            post {
+                always {
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: false,
+                        keepAll: false,
+                        reportDir: 'playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Prod E2E',
+                        useWrapperFileDirectly: true
+                    ])
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo "Production deployment successful!"
+            echo "Build ID: ${params.BUILD_ID}"
+            echo "Production URL: ${env.PROD_URL}"
+        }
+        failure {
+            echo "Production deployment failed!"
+        }
+    }
+}
