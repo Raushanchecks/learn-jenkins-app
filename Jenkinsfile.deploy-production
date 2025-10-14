@@ -18,7 +18,7 @@ pipeline {
             steps {
                 script {
                     // Copy artifacts from the build job
-                    copyArtifacts projectName: 'build-pipeline',
+                    copyArtifacts projectName: 'my-app-build',
                                   selector: specific("${params.BUILD_NUMBER}"),
                                   filter: 'build/**/*',
                                   target: '.'
