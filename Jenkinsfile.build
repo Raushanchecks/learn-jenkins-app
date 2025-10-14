@@ -111,11 +111,10 @@ pipeline {
         //               wait: false
         //     }
         // }
-
-        post {
-            success {
-                echo "Build completed successfully!"
-            }
+    }
+    post {
+        success {
+            echo "Build completed successfully!"
         }
     }
 }
