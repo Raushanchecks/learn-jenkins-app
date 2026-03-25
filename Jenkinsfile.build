@@ -53,7 +53,7 @@ pipeline {
                     steps {
                         sh '''
                             test -f build/index.html
-                            npm test
+                            CI=true npm test -- --watchAll=false --coverage --coverageReporters=lcov
                         '''
                     }
                     post {
@@ -94,6 +94,21 @@ pipeline {
             }
         }
         
+        stage('SAST - SonarQube') {
+            agent {
+                docker {
+                    image 'sonarsource/sonar-scanner-cli:latest'
+                    reuseNode true
+                    args '--network=sonar-net'
+                }
+            }
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh 'sonar-scanner'
+                }
+            }
+        }
+
         stage('Archive Artifacts') {
             steps {
                 // Archive the build folder for use in deployment pipelines

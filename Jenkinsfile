@@ -55,7 +55,7 @@ pipeline {
                     steps {
                         sh '''
                             test -f build/index.html
-                            npm test
+                            CI=true npm test -- --watchAll=false --coverage --coverageReporters=lcov
                         '''
                     }
                     post {
@@ -84,6 +84,21 @@ pipeline {
                             publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, icon: '', keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright Local', reportTitles: '', useWrapperFileDirectly: true])
                         }
                     }
+                }
+            }
+        }
+
+        stage('SAST - SonarQube') {
+            agent {
+                docker {
+                    image 'sonarsource/sonar-scanner-cli:latest'
+                    reuseNode true
+                    args '--network=sonar-net'
+                }
+            }
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh 'sonar-scanner'
                 }
             }
         }
