@@ -93,7 +93,7 @@ pipeline {
                 docker {
                     image 'sonarsource/sonar-scanner-cli:latest'
                     reuseNode true
-                    args '--network=sonar-net'
+                    args '--network=jenkins'
                 }
             }
             steps {

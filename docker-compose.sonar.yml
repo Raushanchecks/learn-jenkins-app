@@ -1,0 +1,105 @@
+version: '3.8'
+
+# Full local stack: Jenkins (with DinD) + SonarQube (with Postgres)
+# All services share the 'jenkins' network so they resolve each other by container name.
+#
+# The network is given an explicit name: jenkins so that
+# --network=jenkins in the Jenkinsfile SAST stage always works
+# regardless of which directory this file is run from.
+#
+# Usage:
+#   docker compose -f docker-compose.sonar.yml up -d
+#
+# Jenkins SonarQube server config (Manage Jenkins → Configure System):
+#   Name : SonarQube
+#   URL  : http://sonarqube:9000   ← reachable via jenkins network
+#   Token: sonar-token credential
+
+services:
+
+  jenkins-docker:
+    image: docker:dind
+    container_name: jenkins-docker
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    volumes:
+      - jenkins-docker-certs:/certs/client
+      - jenkins-data:/var/jenkins_home
+    ports:
+      - "2376:2376"
+    networks:
+      jenkins:
+        aliases:
+          - docker
+    command: --storage-driver overlay2
+
+  my-jenkins:
+    image: my-jenkins
+    build:
+      context: .
+    container_name: my-jenkins
+    restart: on-failure
+    environment:
+      - DOCKER_HOST=tcp://docker:2376
+      - DOCKER_CERT_PATH=/certs/client
+      - DOCKER_TLS_VERIFY=1
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - jenkins-docker-certs:/certs/client:ro
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    networks:
+      - jenkins
+
+  sonar-db:
+    image: postgres:15
+    container_name: sonar-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=sonar
+      - POSTGRES_PASSWORD=sonar
+      - POSTGRES_DB=sonarqube
+    volumes:
+      - sonar_db:/var/lib/postgresql/data
+    networks:
+      - jenkins
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: sonarqube
+    restart: unless-stopped
+    depends_on:
+      - sonar-db
+    ports:
+      - "9000:9000"
+    environment:
+      - SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true
+      - SONAR_SEARCH_JAVAADDITIONALOPTS=-Xlog:disable
+      - SONAR_JDBC_URL=jdbc:postgresql://sonar-db:5432/sonarqube
+      - SONAR_JDBC_USERNAME=sonar
+      - SONAR_JDBC_PASSWORD=sonar
+    volumes:
+      - sonar_data:/opt/sonarqube/data
+      - sonar_logs:/opt/sonarqube/logs
+      - sonar_extensions:/opt/sonarqube/extensions
+    networks:
+      - jenkins
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+networks:
+  jenkins:
+    name: jenkins
+    driver: bridge
+
+volumes:
+  jenkins-docker-certs:
+  jenkins-data:
+  sonar_data:
+  sonar_logs:
+  sonar_extensions:
+  sonar_db:
