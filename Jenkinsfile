@@ -89,16 +89,9 @@ pipeline {
         }
 
         stage('SAST - SonarQube') {
-            agent {
-                docker {
-                    image 'sonarsource/sonar-scanner-cli:latest'
-                    reuseNode true
-                    args '--network=jenkins'
-                }
-            }
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    sh 'sonar-scanner'
+                    sh "${tool 'sonar-scanner'}/bin/sonar-scanner"
                 }
             }
         }
