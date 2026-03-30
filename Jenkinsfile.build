@@ -97,7 +97,11 @@ pipeline {
         stage('SAST - SonarQube') {
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    sh "${tool 'sonar-scanner'}/bin/sonar-scanner"
+                    sh """
+                        ${tool 'sonar-scanner'}/bin/sonar-scanner \
+                            -Dsonar.analysis.buildNumber=${BUILD_NUMBER} \
+                            -Dsonar.links.ci=${BUILD_URL}
+                    """
                 }
             }
         }
