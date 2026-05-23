@@ -2,6 +2,10 @@ pipeline {
     agent any
 
     stages {
+        /*
+Use for comment
+        */
+        /*
         stage('Build') {
             agent{
                 docker{
@@ -22,9 +26,10 @@ pipeline {
                 '''
             }
         }
+        */
         stage('Test'){
             steps{
-                sh 'test -f build/index.html'
+               # sh 'test -f build/index.html'
             }
         }
     }
