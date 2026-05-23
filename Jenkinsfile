@@ -2,9 +2,7 @@ pipeline {
     agent any
 
     stages {
-        /*
-Use for comment
-        */
+        
         /*
         stage('Build') {
             agent{
